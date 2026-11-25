@@ -206,7 +206,7 @@ function renderEditor(path: string): void {
   video = null;
   if (isVideo) {
     video = document.createElement("video");
-    video.src = convertFileSrc(inspection.sourcePath);
+    void loadVideo(video, inspection.sourcePath);
     video.controls = true;
     video.preload = "auto";
     video.setAttribute("aria-label", "Captured recording");
@@ -227,6 +227,26 @@ function renderEditor(path: string): void {
   renderMotion(inspection.timing);
   renderKeyframes(inspection.keyframes, isVideo);
   renderNotes();
+}
+
+let videoUrl: string | null = null;
+
+/**
+ * WebKitGTK hands video URLs to GStreamer, which cannot read Tauri's asset://
+ * scheme. Fetch the file (capped at 30 s, so a few MB) and play it from a blob.
+ */
+async function loadVideo(target: HTMLVideoElement, path: string): Promise<void> {
+  if (videoUrl) URL.revokeObjectURL(videoUrl);
+  videoUrl = null;
+  try {
+    const response = await fetch(convertFileSrc(path));
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const type = path.toLowerCase().endsWith(".mov") ? "video/quicktime" : "video/mp4";
+    videoUrl = URL.createObjectURL(new Blob([await response.arrayBuffer()], { type }));
+    target.src = videoUrl;
+  } catch (error) {
+    ui.editorMeta.textContent = `The video could not be loaded: ${errorText(error)}`;
+  }
 }
 
 /** Readable label color for a swatch (WCAG relative luminance). */
@@ -363,8 +383,10 @@ function marker(className: string, timeMs: number, label: string): HTMLButtonEle
 function renderTimeline(): void {
   if (!inspection || !video) return;
   ui.editorMeta.textContent = describeMedia(inspection.sourcePath);
-  ui.timelineEnd.textContent = seconds(durationMs(), 1);
   for (const old of ui.timeline.querySelectorAll(".marker")) old.remove();
+  // Markers need the clip length; they appear once the video's metadata loads.
+  ui.timelineEnd.textContent = durationMs() > 0 ? seconds(durationMs(), 1) : "";
+  if (durationMs() <= 0) return;
   ui.timeline.append(
     ...inspection.keyframes.map((frame) =>
       marker("keyframe-tick", frame.timeMs, `${KEYFRAME_NAMES[frame.kind] ?? frame.kind} keyframe at ${seconds(frame.timeMs)}`)),
