@@ -22,7 +22,7 @@ use ashpd::desktop::{
     PersistMode, ResponseError, Session,
 };
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{State, WebviewWindow};
 use tokio::sync::Mutex;
 
 use crate::paths;
@@ -31,6 +31,8 @@ use crate::paths;
 pub const MAX_RECORDING_SECONDS: u64 = 30;
 /// File descriptor number the PipeWire remote gets inside the encoder process.
 const CHILD_PIPEWIRE_FD: i32 = 3;
+/// Time for the compositor to remove Poach's window before a capture.
+const HIDE_SETTLE: Duration = Duration::from_millis(350);
 
 #[derive(Default)]
 pub struct Recorder(Mutex<Option<ActiveRecording>>);
@@ -225,8 +227,20 @@ pub async fn stop_recording(recorder: State<'_, Recorder>) -> Result<Recording, 
     }
 }
 
+/// Wayland offers no way to exclude a window from a screenshot, so Poach hides
+/// itself while the portal captures and comes back afterwards.
 #[tauri::command]
-pub async fn take_screenshot() -> Result<PathBuf, String> {
+pub async fn take_screenshot(window: WebviewWindow) -> Result<PathBuf, String> {
+    window.hide().map_err(|error| format!("Could not hide Poach: {error}"))?;
+    // Let the compositor unmap the window before the portal grabs the screen.
+    tokio::time::sleep(HIDE_SETTLE).await;
+    let result = request_screenshot().await;
+    let _ = window.show();
+    let _ = window.set_focus();
+    result
+}
+
+async fn request_screenshot() -> Result<PathBuf, String> {
     let response = Screenshot::request()
         .interactive(true)
         .send()
