@@ -100,3 +100,16 @@ pub fn connector_connected() -> bool {
         pid > 0 && fresh && unsafe { libc::kill(pid, 0) } == 0
     })
 }
+
+/// Command that registers Poach's MCP connector with Claude Code. Installed
+/// builds ship a bundled connector; development runs use the workspace build.
+#[tauri::command]
+pub fn connector_command(app: tauri::AppHandle) -> String {
+    use tauri::Manager;
+    let bundled = app.path().resource_dir().ok().map(|dir| dir.join("mcp/server.mjs")).filter(|path| path.is_file());
+    let server = bundled.unwrap_or_else(|| {
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../packages/mcp-server/dist/index.js")
+    });
+    let server = server.canonicalize().unwrap_or(server);
+    format!("claude mcp add --scope user poach -- node '{}'", server.display())
+}

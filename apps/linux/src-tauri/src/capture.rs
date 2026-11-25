@@ -251,6 +251,7 @@ pub async fn start_recording(
     *slot = Some(active);
     drop(slot);
 
+    crate::app_service::announce_recording(&app).await;
     let timer_app = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(Duration::from_secs(MAX_RECORDING_SECONDS)).await;
@@ -373,6 +374,7 @@ async fn finish(app: &AppHandle, expected: Option<uuid::Uuid>) {
     };
     let Some(active) = active else { return };
     let result = stop_active(active).await;
+    crate::app_service::announce_recording(app).await;
 
     if let Some(controls) = app.get_webview_window(CONTROLS_WINDOW) {
         let _ = controls.close();
@@ -385,6 +387,14 @@ async fn finish(app: &AppHandle, expected: Option<uuid::Uuid>) {
         Ok(recording) => app.emit_to(MAIN_WINDOW, "recording-finished", recording),
         Err(error) => app.emit_to(MAIN_WINDOW, "recording-failed", error),
     };
+}
+
+pub async fn is_recording(app: &AppHandle) -> bool {
+    app.state::<Recorder>().0.lock().await.is_some()
+}
+
+pub async fn stop(app: &AppHandle) {
+    finish(app, None).await;
 }
 
 #[tauri::command]
