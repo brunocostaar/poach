@@ -1,7 +1,11 @@
+import "@fontsource-variable/bricolage-grotesque/standard.css";
+import "./styles.css";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { open } from "@tauri-apps/plugin-dialog";
+import brandIcon from "../src-tauri/icons/128x128@2x.png";
+import pouchIcon from "../src-tauri/icons/icon.png";
 import { handoffPrompt, implementationContext, type Note } from "./prompt";
 
 interface Keyframe {
@@ -16,45 +20,67 @@ interface Inspection {
   readonly sourcePath: string;
   readonly keyframes: readonly Keyframe[];
   readonly palette: readonly string[];
-  readonly timing: { readonly token: string };
+  readonly timing: {
+    readonly durationMs: number;
+    readonly bezier: readonly [number, number, number, number] | null;
+    readonly token: string;
+  };
+  readonly capture?: { readonly widthPx: number; readonly heightPx: number };
   readonly [key: string]: unknown;
 }
 
 interface Recording {
   readonly path: string;
-  readonly durationMs: number;
 }
 
-const STAGE_LABELS: Record<string, string> = {
-  motion: "Measuring motion…",
-  frames: "Extracting keyframes…",
-  palette: "Sampling colors…",
-};
+interface RecordingStarted {
+  readonly maxSeconds: number;
+  readonly controlsHiddenFromVideo: boolean;
+}
 
-function element<T extends HTMLElement>(id: string): T {
+const STAGES = ["motion", "frames", "palette"] as const;
+const KEYFRAME_NAMES: Record<string, string> = { start: "Start", peak: "Peak motion", settled: "Settled" };
+
+function element<T extends Element>(id: string): T {
   const found = document.getElementById(id);
   if (!found) throw new Error(`Missing #${id}`);
-  return found as T;
+  return found as unknown as T;
 }
 
 const ui = {
   connector: element<HTMLParagraphElement>("connector"),
+  newCapture: element<HTMLButtonElement>("new-capture"),
+  capture: element<HTMLElement>("capture"),
   captureActions: element<HTMLDivElement>("capture-actions"),
+  progress: element<HTMLOListElement>("progress"),
   screenshot: element<HTMLButtonElement>("screenshot"),
   import: element<HTMLButtonElement>("import"),
   status: element<HTMLParagraphElement>("status"),
   editor: element<HTMLElement>("editor"),
+  editorTitle: element<HTMLHeadingElement>("editor-title"),
+  editorMeta: element<HTMLParagraphElement>("editor-meta"),
   media: element<HTMLDivElement>("media"),
-  notesArea: element<HTMLDivElement>("notes-area"),
+  timelineBlock: element<HTMLDivElement>("timeline-block"),
+  timeline: element<HTMLDivElement>("timeline"),
+  track: element<HTMLDivElement>("track"),
+  playhead: element<HTMLDivElement>("playhead"),
+  timelineEnd: element<HTMLSpanElement>("timeline-end"),
   noteForm: element<HTMLFormElement>("note-form"),
+  noteLabel: element<HTMLLabelElement>("note-label"),
   noteText: element<HTMLInputElement>("note-text"),
   notes: element<HTMLOListElement>("notes"),
-  palette: element<HTMLUListElement>("palette"),
-  timing: element<HTMLParagraphElement>("timing"),
   keyframes: element<HTMLUListElement>("keyframes"),
+  palette: element<HTMLUListElement>("palette"),
+  motionSection: element<HTMLElement>("motion-section"),
+  curve: element<SVGSVGElement>("curve"),
+  motionDuration: element<HTMLParagraphElement>("motion-duration"),
+  motionCurve: element<HTMLParagraphElement>("motion-curve"),
   context: element<HTMLTextAreaElement>("context"),
   handoffStatus: element<HTMLParagraphElement>("handoff-status"),
 };
+
+element<HTMLImageElement>("brand-mark").src = brandIcon;
+element<HTMLImageElement>("stage-pouch").src = pouchIcon;
 
 let inspection: Inspection | null = null;
 let notes: Note[] = [];
@@ -62,36 +88,61 @@ let video: HTMLVideoElement | null = null;
 let connected = false;
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
+const seconds = (ms: number, digits = 2) => `${(ms / 1000).toFixed(digits)} s`;
+
+// --- Views ---------------------------------------------------------------------
+
+function showCapture(): void {
+  ui.editor.hidden = true;
+  ui.capture.hidden = false;
+  ui.newCapture.hidden = true;
+  video?.pause();
+}
+
+function showEditor(): void {
+  ui.capture.hidden = true;
+  ui.editor.hidden = false;
+  ui.newCapture.hidden = false;
+  window.scrollTo({ top: 0 });
+}
 
 function setBusy(busy: boolean): void {
   for (const button of ui.captureActions.querySelectorAll("button")) button.disabled = busy;
 }
 
-// --- Connector status -------------------------------------------------------
+function showProgress(stage: (typeof STAGES)[number] | null): void {
+  ui.captureActions.hidden = stage !== null;
+  ui.progress.hidden = stage === null;
+  const current = stage ? STAGES.indexOf(stage) : -1;
+  for (const item of ui.progress.querySelectorAll<HTMLLIElement>("li")) {
+    const index = STAGES.indexOf(item.dataset.stage as (typeof STAGES)[number]);
+    item.classList.toggle("done", index < current);
+    item.classList.toggle("active", index === current);
+    if (index === current) item.setAttribute("aria-current", "step");
+    else item.removeAttribute("aria-current");
+  }
+}
+
+// --- Connector -----------------------------------------------------------------
 
 async function refreshConnector(): Promise<void> {
   connected = await invoke<boolean>("connector_connected").catch(() => false);
-  ui.connector.textContent = connected ? "Connector active" : "No assistant connected";
+  ui.connector.textContent = connected ? "Assistant connected" : "No assistant connected";
   ui.connector.classList.toggle("on", connected);
-  ui.connector.title = connected ? "" : "Add the Poach MCP server to Claude Code or Codex and open a session.";
+  ui.connector.title = connected ? "" : "Add the Poach MCP server to Claude Code or Codex, then open a session.";
 }
 
-// --- Capture ----------------------------------------------------------------
-
-interface RecordingStarted {
-  readonly maxSeconds: number;
-  readonly controlsHiddenFromVideo: boolean;
-}
+// --- Capture ---------------------------------------------------------------------
 
 /** Poach hides while recording; the controls window stops it and the result arrives as an event. */
 async function startRecording(source: "monitor" | "window"): Promise<void> {
   setBusy(true);
-  ui.status.textContent = source === "window" ? "Choose a window in the system dialog." : "Starting recording…";
+  ui.status.textContent = source === "window" ? "Pick a window in the system dialog." : "Starting the recording…";
   try {
     const started = await invoke<RecordingStarted>("start_recording", { source });
     ui.status.textContent = started.controlsHiddenFromVideo
-      ? "Recording…"
-      : "Recording. Enable the Poach Capture GNOME extension to keep the controls out of screen recordings.";
+      ? "Recording."
+      : "Recording. Turn on the Poach Capture GNOME extension to keep the controls out of screen recordings.";
   } catch (error) {
     ui.status.textContent = errorText(error);
     setBusy(false);
@@ -105,6 +156,7 @@ async function takeScreenshot(): Promise<void> {
     await analyze(await invoke<string>("take_screenshot"), false);
   } catch (error) {
     ui.status.textContent = errorText(error);
+    showProgress(null);
   } finally {
     setBusy(false);
   }
@@ -122,26 +174,34 @@ async function importFile(): Promise<void> {
     await analyze(path, false);
   } catch (error) {
     ui.status.textContent = errorText(error);
+    showProgress(null);
   } finally {
     setBusy(false);
   }
 }
 
 async function analyze(path: string, isRecording: boolean): Promise<void> {
-  ui.status.textContent = "Analyzing…";
-  inspection = await invoke<Inspection>("inspect", { path, isRecording });
-  notes = [];
+  showCapture();
+  showProgress("motion");
   ui.status.textContent = "";
+  inspection = await invoke<Inspection>("inspect", { path, isRecording });
+  showProgress(null);
+  notes = [];
+  ui.context.value = "";
   ui.handoffStatus.textContent = "";
-  renderEditor();
+  renderEditor(path);
+  showEditor();
 }
 
-// --- Editor -----------------------------------------------------------------
+// --- Editor -----------------------------------------------------------------------
 
-function renderEditor(): void {
+function renderEditor(path: string): void {
+  video = null;
   if (!inspection) return;
   const isVideo = inspection.mediaType === "video";
-  ui.editor.hidden = false;
+  ui.editorTitle.textContent = isVideo ? "Recording" : "Screenshot";
+  ui.editorMeta.textContent = describeMedia(path);
+
   ui.media.replaceChildren();
   video = null;
   if (isVideo) {
@@ -150,6 +210,9 @@ function renderEditor(): void {
     video.controls = true;
     video.preload = "auto";
     video.setAttribute("aria-label", "Captured recording");
+    video.addEventListener("loadedmetadata", renderTimeline);
+    video.addEventListener("timeupdate", updatePlayhead);
+    video.addEventListener("seeked", updatePlayhead);
     ui.media.append(video);
   } else {
     const image = document.createElement("img");
@@ -157,22 +220,94 @@ function renderEditor(): void {
     image.alt = "Captured screenshot";
     ui.media.append(image);
   }
-  ui.notesArea.hidden = !isVideo;
+  ui.timelineBlock.hidden = !isVideo;
+  ui.motionSection.hidden = !isVideo;
 
+  renderPalette(inspection.palette);
+  renderMotion(inspection.timing);
+  renderKeyframes(inspection.keyframes, isVideo);
+  renderNotes();
+}
+
+/** Readable label color for a swatch (WCAG relative luminance). */
+function labelColor(hex: string): string {
+  const channels = [1, 3, 5].map((start) => parseInt(hex.slice(start, start + 2), 16) / 255);
+  const [r, g, b] = channels.map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)) as [number, number, number];
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.32 ? "#16173a" : "#ffffff";
+}
+
+function renderPalette(palette: readonly string[]): void {
+  ui.palette.classList.remove("reveal");
   ui.palette.replaceChildren(
-    ...inspection.palette.map((hex) => {
+    ...palette.map((hex, index) => {
       const item = document.createElement("li");
-      const swatch = document.createElement("span");
+      const swatch = document.createElement("button");
+      swatch.type = "button";
       swatch.className = "swatch";
       swatch.style.background = hex;
-      swatch.setAttribute("aria-hidden", "true");
-      item.append(swatch, hex);
+      swatch.style.color = labelColor(hex);
+      swatch.style.animationDelay = `${index * 45}ms`;
+      const code = document.createElement("span");
+      code.textContent = hex;
+      const action = document.createElement("span");
+      action.className = "swatch-action";
+      action.textContent = "Copy";
+      swatch.append(code, action);
+      swatch.setAttribute("aria-label", `Copy ${hex}`);
+      swatch.addEventListener("click", () => {
+        void writeText(hex).then(() => {
+          action.textContent = "Copied";
+          swatch.classList.add("copied");
+          window.setTimeout(() => {
+            action.textContent = "Copy";
+            swatch.classList.remove("copied");
+          }, 1200);
+        });
+      });
+      item.append(swatch);
       return item;
     }),
   );
-  ui.timing.textContent = inspection.timing.token;
+  // Restart the one entrance animation in the app: colors pour into the panel.
+  void ui.palette.offsetWidth;
+  ui.palette.classList.add("reveal");
+}
+
+function renderMotion(timing: Inspection["timing"]): void {
+  const ns = "http://www.w3.org/2000/svg";
+  const shape = (name: string, attributes: Record<string, string | number>) => {
+    const node = document.createElementNS(ns, name);
+    for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, String(value));
+    return node;
+  };
+  ui.curve.replaceChildren();
+  if (timing.durationMs <= 0) {
+    ui.motionDuration.textContent = "No motion";
+    ui.motionCurve.textContent = "Nothing moved enough to measure.";
+    return;
+  }
+  ui.motionDuration.textContent = seconds(timing.durationMs);
+  const bezier = timing.bezier;
+  if (!bezier) {
+    ui.motionCurve.textContent = "Easing could not be estimated.";
+    return;
+  }
+  ui.motionCurve.textContent = `cubic-bezier(${bezier.join(", ")})`;
+  // 100×100 box, y grows downward, so flip the curve's y values.
+  const [x1, y1, x2, y2] = bezier.map((value) => value * 100) as [number, number, number, number];
+  ui.curve.append(
+    shape("path", { class: "axis", d: "M0 0V100H100" }),
+    shape("line", { class: "handle", x1: 0, y1: 100, x2: x1, y2: 100 - y1 }),
+    shape("line", { class: "handle", x1: 100, y1: 0, x2: x2, y2: 100 - y2 }),
+    shape("path", { class: "path", d: `M0 100C${x1} ${100 - y1} ${x2} ${100 - y2} 100 0` }),
+    shape("circle", { class: "knot", cx: x1, cy: 100 - y1, r: 3.5 }),
+    shape("circle", { class: "knot", cx: x2, cy: 100 - y2, r: 3.5 }),
+  );
+}
+
+function renderKeyframes(frames: readonly Keyframe[], isVideo: boolean): void {
   ui.keyframes.replaceChildren(
-    ...inspection.keyframes.map((frame) => {
+    ...frames.map((frame) => {
       const item = document.createElement("li");
       const button = document.createElement("button");
       button.type = "button";
@@ -182,16 +317,67 @@ function renderEditor(): void {
       const image = document.createElement("img");
       image.src = convertFileSrc(frame.imagePath);
       image.alt = "";
-      const caption = document.createElement("span");
-      caption.textContent = `${frame.kind} · ${(frame.timeMs / 1000).toFixed(2)} s`;
-      button.append(image, caption);
-      button.setAttribute("aria-label", `Go to ${caption.textContent}`);
+      const name = document.createElement("span");
+      name.className = "keyframe-name";
+      name.textContent = KEYFRAME_NAMES[frame.kind] ?? frame.kind;
+      const time = document.createElement("span");
+      time.className = "keyframe-time";
+      time.textContent = seconds(frame.timeMs);
+      button.append(image, name, time);
+      button.setAttribute("aria-label", `Go to ${name.textContent} at ${time.textContent}`);
       item.append(button);
       return item;
     }),
   );
-  renderNotes();
-  ui.editor.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+/** "9.2 s, 1920 × 1080" for recordings; imported files keep their name. */
+function describeMedia(path: string): string {
+  const parts: string[] = [];
+  if (!/\/captures\/(recording|screenshot)-/.test(path)) parts.push(path.split("/").pop() ?? "");
+  if (durationMs() > 0) parts.push(seconds(durationMs(), 1));
+  if (inspection?.capture) parts.push(`${inspection.capture.widthPx} × ${inspection.capture.heightPx}`);
+  return parts.filter(Boolean).join(", ");
+}
+
+// --- Timeline ----------------------------------------------------------------------
+
+function durationMs(): number {
+  return video && Number.isFinite(video.duration) ? video.duration * 1000 : 0;
+}
+
+function marker(className: string, timeMs: number, label: string): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `marker ${className}`;
+  button.style.left = `${Math.min(100, (timeMs / Math.max(1, durationMs())) * 100)}%`;
+  button.setAttribute("aria-label", label);
+  button.title = label;
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    seek(timeMs);
+  });
+  return button;
+}
+
+function renderTimeline(): void {
+  if (!inspection || !video) return;
+  ui.editorMeta.textContent = describeMedia(inspection.sourcePath);
+  ui.timelineEnd.textContent = seconds(durationMs(), 1);
+  for (const old of ui.timeline.querySelectorAll(".marker")) old.remove();
+  ui.timeline.append(
+    ...inspection.keyframes.map((frame) =>
+      marker("keyframe-tick", frame.timeMs, `${KEYFRAME_NAMES[frame.kind] ?? frame.kind} keyframe at ${seconds(frame.timeMs)}`)),
+    ...notes.map((note) => marker("note-pin", note.timeMs, `Note at ${seconds(note.timeMs)}: ${note.text}`)),
+  );
+  updatePlayhead();
+}
+
+function updatePlayhead(): void {
+  if (!video) return;
+  const total = durationMs();
+  ui.playhead.style.left = total ? `${(video.currentTime * 1000 / total) * 100}%` : "0";
+  ui.noteLabel.textContent = `Note at ${seconds(video.currentTime * 1000)}`;
 }
 
 function seek(timeMs: number): void {
@@ -200,6 +386,13 @@ function seek(timeMs: number): void {
   video.currentTime = timeMs / 1000;
 }
 
+ui.timeline.addEventListener("click", (event) => {
+  const box = ui.timeline.getBoundingClientRect();
+  seek(Math.max(0, Math.min(1, (event.clientX - box.left) / box.width)) * durationMs());
+});
+
+// --- Notes -------------------------------------------------------------------------
+
 function renderNotes(): void {
   ui.notes.replaceChildren(
     ...notes.map((note, index) => {
@@ -207,14 +400,14 @@ function renderNotes(): void {
       const jump = document.createElement("button");
       jump.type = "button";
       jump.className = "link";
-      jump.textContent = `${(note.timeMs / 1000).toFixed(2)} s`;
+      jump.textContent = seconds(note.timeMs);
       jump.setAttribute("aria-label", `Go to ${jump.textContent}`);
       jump.addEventListener("click", () => seek(note.timeMs));
       const text = document.createElement("span");
       text.textContent = note.text;
       const remove = document.createElement("button");
       remove.type = "button";
-      remove.className = "link";
+      remove.className = "link quiet";
       remove.textContent = "Remove";
       remove.setAttribute("aria-label", `Remove note at ${jump.textContent}`);
       remove.addEventListener("click", () => {
@@ -225,6 +418,7 @@ function renderNotes(): void {
       return item;
     }),
   );
+  renderTimeline();
 }
 
 function addNote(event: SubmitEvent): void {
@@ -238,25 +432,26 @@ function addNote(event: SubmitEvent): void {
   renderNotes();
 }
 
+// --- Handoff -----------------------------------------------------------------------
+
 async function handoff(assistant: "claude" | "codex"): Promise<void> {
   if (!inspection) return;
   await refreshConnector();
   if (!connected) {
-    ui.handoffStatus.textContent = "Open a Claude Code or Codex session with the Poach MCP server first.";
+    ui.handoffStatus.textContent = "Open a Claude Code or Codex session with the Poach connector, then try again.";
     return;
   }
   try {
     const context = implementationContext(ui.context.value, notes);
     const briefId = await invoke<string>("share_handoff", { inspection, context, annotations: notes });
     await writeText(handoffPrompt(briefId, inspection.mediaType === "video"));
-    const name = assistant === "claude" ? "Claude Code" : "Codex";
-    ui.handoffStatus.textContent = `Prompt copied. Paste it into ${name}.`;
+    ui.handoffStatus.textContent = `Prompt copied. Paste it into ${assistant === "claude" ? "Claude Code" : "Codex"}.`;
   } catch (error) {
     ui.handoffStatus.textContent = errorText(error);
   }
 }
 
-// --- Wiring -----------------------------------------------------------------
+// --- Wiring ------------------------------------------------------------------------
 
 for (const button of document.querySelectorAll<HTMLButtonElement>("[data-record]")) {
   button.addEventListener("click", () => void startRecording(button.dataset.record === "window" ? "window" : "monitor"));
@@ -266,19 +461,25 @@ for (const button of document.querySelectorAll<HTMLButtonElement>("[data-assista
 }
 ui.screenshot.addEventListener("click", () => void takeScreenshot());
 ui.import.addEventListener("click", () => void importFile());
+ui.newCapture.addEventListener("click", showCapture);
 ui.noteForm.addEventListener("submit", addNote);
+
 void listen<Recording>("recording-finished", (event) => {
   void analyze(event.payload.path, true)
-    .catch((error: unknown) => { ui.status.textContent = errorText(error); })
+    .catch((error: unknown) => {
+      ui.status.textContent = errorText(error);
+      showProgress(null);
+    })
     .finally(() => setBusy(false));
 });
 void listen<string>("recording-failed", (event) => {
   ui.status.textContent = event.payload;
   setBusy(false);
 });
-
 void listen<string>("inspect-progress", (event) => {
-  ui.status.textContent = STAGE_LABELS[event.payload] ?? "Analyzing…";
+  const stage = STAGES.find((name) => name === event.payload);
+  if (stage) showProgress(stage);
 });
+
 void refreshConnector();
 window.setInterval(() => void refreshConnector(), 5000);

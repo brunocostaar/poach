@@ -1,3 +1,5 @@
+import "@fontsource-variable/bricolage-grotesque/standard.css";
+import "./overlay.css";
 import { invoke } from "@tauri-apps/api/core";
 
 const elapsed = document.getElementById("elapsed");
