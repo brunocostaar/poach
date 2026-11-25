@@ -48,6 +48,10 @@ Run the pointer-trace event-cap regression check with `bash scripts/test-pointer
 
 To build a Finder-openable app bundle, run `bash scripts/build-macos-app.sh`. It creates `outputs/Poach.app`, which is ignored by Git.
 
+### Linux client (preview)
+
+`apps/linux` is a Tauri client that records through xdg-desktop-portal and GStreamer. It needs Rust, the WebKitGTK 4.1 development headers, and the PipeWire and openh264 GStreamer plugins; see [apps/linux/README.md](apps/linux/README.md) for packages and current feature coverage. Run it with `pnpm --filter @poach/linux app:dev`. On Linux, the app and the MCP server share `$XDG_CACHE_HOME/poach` instead of `~/Library/Caches/Poach`.
+
 ### Screen recording signing
 
 For Screen Recording development on macOS 26, use an `Apple Development` identity with a Team ID. The build script prefers that identity automatically; set `POACH_CODESIGN_IDENTITY` to its exact name when you have more than one. Apple documents that ScreenCaptureKit permission must be granted to the app and that the app must restart after authorization ([capture guide](https://developer.apple.com/documentation/screencapturekit/capturing-screen-content-in-macos), [manage signing identities in Xcode](https://developer.apple.com/documentation/xcode/sharing-your-teams-signing-certificates)).
@@ -135,6 +139,7 @@ Build first, then configure an MCP client to launch the server's compiled JavaSc
 
 ```text
 apps/chrome/         Unpacked Chrome companion for component evidence
+apps/linux/          Tauri preview client using xdg-desktop-portal capture
 apps/macos/          SwiftUI menu-bar app, capture service, and floating HUD
 packages/core/       TypeScript frame extraction, motion analysis, and palette code
 packages/mcp-server/ Local MCP server for media inspection and assistant handoff
