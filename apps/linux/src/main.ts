@@ -481,5 +481,11 @@ void listen<string>("inspect-progress", (event) => {
   if (stage) showProgress(stage);
 });
 
+function applyWindowRadius(radius: number): void {
+  document.documentElement.style.setProperty("--window-radius", `${radius}px`);
+}
+void invoke<number>("window_radius").then(applyWindowRadius).catch(() => undefined);
+void listen<number>("window-radius", (event) => applyWindowRadius(event.payload));
+
 void refreshConnector();
 window.setInterval(() => void refreshConnector(), 5000);
