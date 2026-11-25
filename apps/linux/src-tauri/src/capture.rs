@@ -269,6 +269,7 @@ fn open_controls(app: &AppHandle) -> Result<WebviewWindow, String> {
         .inner_size(248.0, 56.0)
         .resizable(false)
         .decorations(false)
+        .transparent(true)
         .always_on_top(true)
         .skip_taskbar(true)
         .focused(false)
