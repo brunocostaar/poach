@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Poach</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <header class="bar">
+      <h1>Poach</h1>
+      <p id="connector" class="connector" role="status" aria-live="polite">Checking connector…</p>
+    </header>
+
+    <main>
+      <section id="capture" class="panel" aria-labelledby="capture-title">
+        <h2 id="capture-title">Capture</h2>
+        <div class="actions" id="capture-actions">
+          <button type="button" data-record="monitor">Record screen</button>
+          <button type="button" data-record="window">Record window</button>
+          <button type="button" id="screenshot">Take screenshot</button>
+          <button type="button" id="import" class="secondary">Open file…</button>
+        </div>
+        <div class="recording" id="recording" hidden>
+          <span class="dot" aria-hidden="true"></span>
+          <span id="elapsed" role="timer">0.0 s</span>
+          <button type="button" id="stop">Stop recording</button>
+        </div>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+      </section>
+
+      <section id="editor" class="panel" aria-labelledby="editor-title" hidden>
+        <h2 id="editor-title">Review</h2>
+        <div class="media" id="media"></div>
+
+        <div class="notes" id="notes-area">
+          <form id="note-form" class="note-form">
+            <label for="note-text">Note at the playhead</label>
+            <input id="note-text" type="text" placeholder="The card lifts and the shadow deepens" autocomplete="off" />
+            <button type="submit">Add note</button>
+          </form>
+          <ol id="notes" class="note-list" aria-label="Timestamped notes"></ol>
+        </div>
+
+        <div class="facts">
+          <div>
+            <h3>Palette</h3>
+            <ul id="palette" class="palette" aria-label="Dominant colors"></ul>
+          </div>
+          <div>
+            <h3>Timing</h3>
+            <p id="timing"></p>
+          </div>
+        </div>
+
+        <div>
+          <h3>Keyframes</h3>
+          <ul id="keyframes" class="keyframes"></ul>
+        </div>
+
+        <label for="context" class="block-label">Instructions for the whole capture</label>
+        <textarea id="context" rows="3" placeholder="Use our Button component; keep the spring feel."></textarea>
+
+        <div class="actions handoff">
+          <button type="button" data-assistant="claude">Copy prompt for Claude Code</button>
+          <button type="button" data-assistant="codex">Copy prompt for Codex</button>
+        </div>
+        <p id="handoff-status" class="status" role="status" aria-live="polite"></p>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

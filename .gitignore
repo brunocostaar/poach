@@ -19,3 +19,7 @@ outputs/beta/
 outputs/runtime-cache/
 outputs/.poach-build.*/
 outputs/poach-launch-kit/
+
+# Linux client
+apps/linux/src-tauri/target/
+apps/linux/src-tauri/gen/
