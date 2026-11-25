@@ -2655,6 +2655,7 @@ name = "poach-linux"
 version = "0.1.0"
 dependencies = [
  "ashpd",
+ "futures-util",
  "libc",
  "serde",
  "serde_json",
@@ -2665,6 +2666,7 @@ dependencies = [
  "tokio",
  "url",
  "uuid",
+ "zbus",
 ]
 
 [[package]]

@@ -1,6 +1,7 @@
 mod analysis;
 mod capture;
 mod handoff;
+mod mutter;
 mod paths;
 
 fn main() {

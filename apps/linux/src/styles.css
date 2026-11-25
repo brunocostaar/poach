@@ -55,10 +55,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 button.link { background: none; color: var(--cobalt); padding: 0; font-weight: 500; }
 
 .status { margin: 0; color: var(--muted); min-height: 1.45em; }
-.recording { display: flex; align-items: center; gap: 12px; font-variant-numeric: tabular-nums; }
-.dot { width: 10px; height: 10px; border-radius: 50%; background: #d93025; animation: pulse 1.2s ease-in-out infinite; }
-@keyframes pulse { 50% { opacity: 0.35; } }
-@media (prefers-reduced-motion: reduce) { .dot { animation: none; } }
 
 .media video, .media img { width: 100%; max-height: 420px; object-fit: contain; background: #000; border-radius: 8px; display: block; }
 
