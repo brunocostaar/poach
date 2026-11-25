@@ -1,0 +1,17 @@
+:root {
+  color-scheme: dark;
+  font: 600 14px/1 system-ui, "Cantarell", "Inter", sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: #1d1c1a; color: #ecebe8; overflow: hidden; user-select: none; }
+.controls { height: 100%; display: flex; align-items: center; gap: 12px; padding: 0 10px 0 16px; cursor: grab; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: #e5484d; animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .dot { animation: none; } }
+.elapsed { flex: 1; font-variant-numeric: tabular-nums; }
+button {
+  font: inherit; border: 0; border-radius: 8px; padding: 9px 16px; cursor: pointer;
+  background: #e8661c; color: #fff;
+}
+button:disabled { opacity: 0.6; cursor: default; }
+button:focus-visible { outline: 2px solid #8fa4ff; outline-offset: 2px; }

@@ -40,9 +40,6 @@ function element<T extends HTMLElement>(id: string): T {
 const ui = {
   connector: element<HTMLParagraphElement>("connector"),
   captureActions: element<HTMLDivElement>("capture-actions"),
-  recording: element<HTMLDivElement>("recording"),
-  elapsed: element<HTMLSpanElement>("elapsed"),
-  stop: element<HTMLButtonElement>("stop"),
   screenshot: element<HTMLButtonElement>("screenshot"),
   import: element<HTMLButtonElement>("import"),
   status: element<HTMLParagraphElement>("status"),
@@ -62,7 +59,6 @@ const ui = {
 let inspection: Inspection | null = null;
 let notes: Note[] = [];
 let video: HTMLVideoElement | null = null;
-let recordingTimer: number | undefined;
 let connected = false;
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -82,42 +78,22 @@ async function refreshConnector(): Promise<void> {
 
 // --- Capture ----------------------------------------------------------------
 
-async function startRecording(source: "monitor" | "window"): Promise<void> {
-  setBusy(true);
-  ui.status.textContent = "Choose what to share in the system dialog.";
-  try {
-    const { maxSeconds } = await invoke<{ maxSeconds: number }>("start_recording", { source });
-    const started = performance.now();
-    ui.captureActions.hidden = true;
-    ui.recording.hidden = false;
-    ui.status.textContent = `Recording. Stops automatically after ${maxSeconds} seconds.`;
-    ui.stop.focus();
-    recordingTimer = window.setInterval(() => {
-      const seconds = (performance.now() - started) / 1000;
-      ui.elapsed.textContent = `${seconds.toFixed(1)} s`;
-      if (seconds >= maxSeconds) void stopRecording();
-    }, 100);
-  } catch (error) {
-    ui.status.textContent = errorText(error);
-    setBusy(false);
-  }
+interface RecordingStarted {
+  readonly maxSeconds: number;
+  readonly controlsHiddenFromVideo: boolean;
 }
 
-async function stopRecording(): Promise<void> {
-  if (recordingTimer === undefined) return;
-  window.clearInterval(recordingTimer);
-  recordingTimer = undefined;
-  ui.stop.disabled = true;
-  ui.status.textContent = "Saving recording…";
+/** Poach hides while recording; the controls window stops it and the result arrives as an event. */
+async function startRecording(source: "monitor" | "window"): Promise<void> {
+  setBusy(true);
+  ui.status.textContent = source === "window" ? "Choose a window in the system dialog." : "Starting recording…";
   try {
-    const recording = await invoke<Recording>("stop_recording");
-    await analyze(recording.path, true);
+    const started = await invoke<RecordingStarted>("start_recording", { source });
+    ui.status.textContent = started.controlsHiddenFromVideo
+      ? "Recording…"
+      : "Recording. Enable the Poach Capture GNOME extension to keep the controls out of screen recordings.";
   } catch (error) {
     ui.status.textContent = errorText(error);
-  } finally {
-    ui.recording.hidden = true;
-    ui.captureActions.hidden = false;
-    ui.stop.disabled = false;
     setBusy(false);
   }
 }
@@ -288,12 +264,17 @@ for (const button of document.querySelectorAll<HTMLButtonElement>("[data-record]
 for (const button of document.querySelectorAll<HTMLButtonElement>("[data-assistant]")) {
   button.addEventListener("click", () => void handoff(button.dataset.assistant === "codex" ? "codex" : "claude"));
 }
-ui.stop.addEventListener("click", () => void stopRecording());
 ui.screenshot.addEventListener("click", () => void takeScreenshot());
 ui.import.addEventListener("click", () => void importFile());
 ui.noteForm.addEventListener("submit", addNote);
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && recordingTimer !== undefined) void stopRecording();
+void listen<Recording>("recording-finished", (event) => {
+  void analyze(event.payload.path, true)
+    .catch((error: unknown) => { ui.status.textContent = errorText(error); })
+    .finally(() => setBusy(false));
+});
+void listen<string>("recording-failed", (event) => {
+  ui.status.textContent = event.payload;
+  setBusy(false);
 });
 
 void listen<string>("inspect-progress", (event) => {
