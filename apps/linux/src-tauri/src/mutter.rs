@@ -66,6 +66,12 @@ impl AreaCast {
     }
 }
 
+/// API version of the Poach Capture extension, when it is enabled.
+pub async fn extension_version() -> Option<u32> {
+    let connection = Connection::session().await.ok()?;
+    PoachShellProxy::new(&connection).await.ok()?.get_version().await.ok()
+}
+
 /// The monitor to record, when the Poach Capture extension is enabled.
 pub async fn capture_monitor() -> Option<(i32, i32, i32, i32)> {
     let connection = Connection::session().await.ok()?;

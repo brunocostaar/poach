@@ -23,18 +23,22 @@ try {
 }
 "#;
 
-/// Built core entry point. `POACH_CORE_ENTRY` overrides the workspace build.
-fn core_entry() -> Result<PathBuf, String> {
-    let path = std::env::var_os("POACH_CORE_ENTRY").map(PathBuf::from).unwrap_or_else(|| {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../packages/core/dist/index.js")
-    });
+/// Built core entry point: `POACH_CORE_ENTRY`, then the copy bundled with an
+/// installed Poach, then the workspace build used in development.
+fn core_entry(app: &AppHandle) -> Result<PathBuf, String> {
+    use tauri::Manager;
+    let bundled = app.path().resource_dir().ok().map(|dir| dir.join("core/index.js"));
+    let path = std::env::var_os("POACH_CORE_ENTRY")
+        .map(PathBuf::from)
+        .or(bundled.filter(|path| path.is_file()))
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../packages/core/dist/index.js"));
     path.canonicalize()
-        .map_err(|_| format!("Poach's analysis engine is missing at {}. Run `pnpm build` at the repository root.", path.display()))
+        .map_err(|_| format!("Poach's analysis engine is missing at {}. Reinstall Poach, or run `pnpm build` in a checkout.", path.display()))
 }
 
 #[tauri::command]
 pub async fn inspect(app: AppHandle, path: PathBuf, is_recording: bool) -> Result<Value, String> {
-    let engine = url::Url::from_file_path(core_entry()?)
+    let engine = url::Url::from_file_path(core_entry(&app)?)
         .map_err(|_| "Invalid analysis engine path.".to_string())?
         .to_string();
     let frames = paths::private_dir(PathBuf::from("frames").join(uuid::Uuid::new_v4().to_string()))?;

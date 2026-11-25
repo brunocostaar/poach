@@ -48,7 +48,7 @@ function element<T extends Element>(id: string): T {
 }
 
 const ui = {
-  connector: element<HTMLParagraphElement>("connector"),
+  connector: element<HTMLButtonElement>("connector"),
   newCapture: element<HTMLButtonElement>("new-capture"),
   capture: element<HTMLElement>("capture"),
   captureActions: element<HTMLDivElement>("capture-actions"),
@@ -129,7 +129,16 @@ async function refreshConnector(): Promise<void> {
   connected = await invoke<boolean>("connector_connected").catch(() => false);
   ui.connector.textContent = connected ? "Assistant connected" : "No assistant connected";
   ui.connector.classList.toggle("on", connected);
-  ui.connector.title = connected ? "" : "Add the Poach MCP server to Claude Code or Codex, then open a session.";
+  ui.connector.title = connected ? "" : "Copy the command that connects Poach to Claude Code";
+}
+
+/** Copy the setup command; the user runs it once, then opens a new session. */
+async function copyConnectorSetup(): Promise<void> {
+  if (connected) return;
+  const command = await invoke<string>("connector_command");
+  await writeText(command);
+  ui.status.textContent = "Setup command copied. Run it in a terminal, then start a new Claude Code session.";
+  ui.handoffStatus.textContent = ui.status.textContent;
 }
 
 // --- Capture ---------------------------------------------------------------------
@@ -484,6 +493,21 @@ for (const button of document.querySelectorAll<HTMLButtonElement>("[data-assista
 ui.screenshot.addEventListener("click", () => void takeScreenshot());
 ui.import.addEventListener("click", () => void importFile());
 ui.newCapture.addEventListener("click", showCapture);
+ui.connector.addEventListener("click", () => void copyConnectorSetup());
+
+// Actions from the top bar menu and the global shortcut (via the GNOME extension).
+void listen<string>("menu-action", (event) => {
+  if (event.payload === "screenshot") {
+    showCapture();
+    void takeScreenshot();
+  } else if (event.payload === "new-recording") {
+    showCapture();
+    ui.captureActions.querySelector<HTMLButtonElement>("[data-record]")?.focus();
+  } else if (event.payload === "record-screen") {
+    showCapture();
+    void startRecording("monitor");
+  }
+});
 ui.noteForm.addEventListener("submit", addNote);
 
 void listen<Recording>("recording-finished", (event) => {
