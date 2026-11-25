@@ -17,7 +17,10 @@ so analysis, briefs and `poach_read_moment` behave the same on both platforms.
 | Handoff to Claude Code / Codex via MCP | ✅ |
 | Record a free-form area | ⏳ portals only offer screens and windows; crop afterwards |
 | Pointer trace | ⏳ planned via `CursorMode::METADATA` (positions only; Wayland does not expose button state) |
-| Global capture shortcut | ⏳ planned via the GlobalShortcuts portal |
+| Top bar menu (Open, New Screenshot, New Recording, Quit) | ✅ with the GNOME extension |
+| Global shortcut to start and stop a screen recording | ✅ Super+Shift+P, with the GNOME extension |
+| Keeps running when its window closes; one instance at a time | ✅ closing hides it when the top bar item exists, otherwise quits |
+| Installable package with an app menu entry | ✅ `.rpm` (and `.deb`) |
 | Font matching, favorites, Chrome companion, palette overrides | ⏳ |
 | Excluding Poach's own window from recordings | ✅ Poach hides while capturing |
 
@@ -50,9 +53,31 @@ apps/linux/gnome-extension/install.sh   # then log out and back in
 Without the extension, screen recordings use the ScreenCast portal and the
 controls may appear in the video. Window recordings never include them.
 
-## Run
+## Install
 
-From the repository root:
+Build the package from the repository root, then install it:
+
+```sh
+pnpm install
+pnpm --filter @poach/linux app:build --bundles rpm
+sudo dnf install apps/linux/src-tauri/target/release/bundle/rpm/Poach-*.rpm
+```
+
+The package carries the analysis engine, a self-contained MCP connector in
+`/usr/lib/Poach/mcp/server.mjs` and the GNOME extension; it depends on the
+system's Node.js, FFmpeg and GStreamer. Turn the extension on once with
+`gnome-extensions enable poach-capture@brunocostaar.github.io`, then log out and
+back in. Use `--bundles deb` on Debian and Ubuntu.
+
+While Poach runs, the extension shows the pouch in the top bar with **Open
+Poach**, **New Screenshot**, **New Recording** and **Quit Poach**, and
+**Super+Shift+P** starts a screen recording or stops the current one. Change
+the shortcut with `gsettings --schemadir <extension>/schemas set
+org.gnome.shell.extensions.poach-capture toggle-recording "['<Super><Alt>p']"`.
+Closing the window keeps Poach in the top bar, like the macOS app in the menu
+bar; without the extension, closing the window quits.
+
+## Run from source
 
 ```sh
 pnpm install
@@ -60,20 +85,20 @@ pnpm build                     # builds @poach/core, the MCP server and this UI
 pnpm --filter @poach/linux app:dev
 ```
 
-`pnpm --filter @poach/linux app:build` produces `.deb`, `.rpm` and AppImage
-bundles. The bundles still look for the analysis engine in the checkout; set
-`POACH_CORE_ENTRY` to another `packages/core/dist/index.js` and `POACH_NODE` to
-another Node binary if needed.
+`POACH_CORE_ENTRY` points Poach at another `packages/core/dist/index.js` and
+`POACH_NODE` at another Node binary.
 
 ## Connect your assistant
 
+Click **No assistant connected** in Poach to copy the setup command for your
+installation, run it once, then open a new session:
+
 ```sh
-claude mcp add poach -- node "$PWD/packages/mcp-server/dist/index.js"
-# or
-codex mcp add poach -- node "$PWD/packages/mcp-server/dist/index.js"
+claude mcp add --scope user poach -- node /usr/lib/Poach/mcp/server.mjs
+# from a checkout: node "$PWD/packages/mcp-server/dist/index.js"; Codex: codex mcp add …
 ```
 
-Open a new session; Poach shows **Connector active** once the server is running.
+Poach shows **Assistant connected** once a session has the connector running.
 
 ## Data
 
