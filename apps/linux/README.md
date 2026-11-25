@@ -8,7 +8,8 @@ so analysis, briefs and `poach_read_moment` behave the same on both platforms.
 
 | Feature | Linux |
 | --- | --- |
-| Record a screen or window (ScreenCast portal → PipeWire → GStreamer, H.264 MP4) | ✅ |
+| Record a screen or window (PipeWire → GStreamer, H.264 MP4) | ✅ |
+| Recording controls (timer and Stop) that stay out of the video | ✅ windows always; screens with the GNOME extension |
 | Screenshot (Screenshot portal) | ✅ |
 | Open an existing image or video | ✅ |
 | Keyframes, palette, timing (`@poach/core`) | ✅ |
@@ -18,7 +19,7 @@ so analysis, briefs and `poach_read_moment` behave the same on both platforms.
 | Pointer trace | ⏳ planned via `CursorMode::METADATA` (positions only; Wayland does not expose button state) |
 | Global capture shortcut | ⏳ planned via the GlobalShortcuts portal |
 | Font matching, favorites, Chrome companion, palette overrides | ⏳ |
-| Excluding Poach's own window from recordings | ❌ not possible on Wayland; minimize it or record another window |
+| Excluding Poach's own window from recordings | ✅ Poach hides while capturing |
 
 ## Requirements (Fedora)
 
@@ -32,6 +33,22 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 Debian/Ubuntu: `libwebkit2gtk-4.1-dev build-essential libssl-dev librsvg2-dev
 gstreamer1.0-pipewire gstreamer1.0-plugins-bad ffmpeg nodejs`.
+
+## GNOME extension
+
+Wayland cannot exclude a window from a capture. On GNOME, Poach records screens
+through Mutter's `RecordArea`, which paints the stage again off-screen, and the
+**Poach Capture** extension skips the recording controls in those paints. The
+controls stay visible on your monitor and never reach the video. The extension
+also keeps the controls above other windows and tells Poach which monitor to
+record (the one under the pointer).
+
+```sh
+apps/linux/gnome-extension/install.sh   # then log out and back in
+```
+
+Without the extension, screen recordings use the ScreenCast portal and the
+controls may appear in the video. Window recordings never include them.
 
 ## Run
 

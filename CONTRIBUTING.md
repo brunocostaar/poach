@@ -50,7 +50,7 @@ To build a Finder-openable app bundle, run `bash scripts/build-macos-app.sh`. It
 
 ### Linux client (preview)
 
-`apps/linux` is a Tauri client that records through xdg-desktop-portal and GStreamer. It needs Rust, the WebKitGTK 4.1 development headers, and the PipeWire and openh264 GStreamer plugins; see [apps/linux/README.md](apps/linux/README.md) for packages and current feature coverage. Run it with `pnpm --filter @poach/linux app:dev`. On Linux, the app and the MCP server share `$XDG_CACHE_HOME/poach` instead of `~/Library/Caches/Poach`.
+`apps/linux` is a Tauri client that records through xdg-desktop-portal and GStreamer. It needs Rust, the WebKitGTK 4.1 development headers, and the PipeWire and openh264 GStreamer plugins; see [apps/linux/README.md](apps/linux/README.md) for packages and current feature coverage. Run it with `pnpm --filter @poach/linux app:dev`. Screen recordings on GNOME use Mutter's ScreenCast D-Bus API together with the Poach Capture extension in `apps/linux/gnome-extension`, which keeps the recording controls out of the video. On Linux, the app and the MCP server share `$XDG_CACHE_HOME/poach` instead of `~/Library/Caches/Poach`.
 
 ### Screen recording signing
 
