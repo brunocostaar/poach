@@ -8,6 +8,7 @@
   --cobalt-ink: #c9ccff;
   --pouch: #ff633b;
   --pouch-press: #f0522a;
+  --on-pouch: #16173a; /* labels on pouch orange in both themes (5:1 or better) */
   --band: #e5f765;
   --paper: #f5f5f8;
   --surface: #ffffff;
@@ -155,8 +156,8 @@ main { padding: 0 28px 40px; max-width: 1240px; margin: 0 auto; }
 .choice-title { font-weight: 650; font-size: var(--step-1); }
 .choice-hint { color: var(--cobalt-ink); font-size: var(--step--1); }
 .choice:hover:not(:disabled) { background: rgb(255 255 255 / 0.12); }
-.choice.primary { background: var(--pouch); border-color: transparent; color: var(--ink); }
-.choice.primary .choice-hint { color: color-mix(in srgb, var(--ink) 78%, var(--pouch)); }
+.choice.primary { background: var(--pouch); border-color: transparent; color: var(--on-pouch); }
+.choice.primary .choice-hint { color: var(--on-pouch); }
 .choice.primary:hover:not(:disabled) { background: var(--pouch-press); }
 .choice:focus-visible { outline-color: var(--band); }
 
@@ -282,7 +283,7 @@ textarea { resize: vertical; min-height: 96px; }
 .handoff h2 { margin-bottom: 0; }
 .primary-action {
   border: 0; border-radius: var(--radius-control); padding: 12px 16px;
-  background: var(--pouch); color: var(--ink); font-weight: 700;
+  background: var(--pouch); color: var(--on-pouch); font-weight: 700;
 }
 .primary-action:hover:not(:disabled) { background: var(--pouch-press); }
 
