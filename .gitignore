@@ -16,6 +16,7 @@ outputs/Poach.app/
 outputs/connectors/
 outputs/compiled-icon/
 outputs/beta/
+outputs/linux/
 outputs/runtime-cache/
 outputs/.poach-build.*/
 outputs/poach-launch-kit/
