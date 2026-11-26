@@ -535,7 +535,11 @@ for (const button of document.querySelectorAll<HTMLButtonElement>("[data-assista
 }
 ui.screenshot.addEventListener("click", () => void takeScreenshot());
 ui.import.addEventListener("click", () => void importFile());
-ui.newCapture.addEventListener("click", showCapture);
+ui.newCapture.addEventListener("click", () => {
+  showCapture();
+  // The New capture button is now hidden; keep keyboard focus in the page.
+  ui.captureActions.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+});
 ui.connector.addEventListener("click", () => {
   if (ui.connectorMenu.hidden) openConnectorMenu();
   else closeConnectorMenu(true);
