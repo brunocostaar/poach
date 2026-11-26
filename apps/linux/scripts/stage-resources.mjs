@@ -1,15 +1,25 @@
 // Stage what an installed Poach needs beside its binary (see
 // src-tauri/tauri.bundle.conf.json): the analysis engine, a self-contained
-// MCP connector and the GNOME extension. Run after `pnpm build`.
+// MCP connector and the GNOME extension. Run after building @poach/core and
+// @poach/mcp-server (the app:build hook does both).
 import { build } from "esbuild";
 import { execFileSync } from "node:child_process";
-import { cp, mkdir, rm } from "node:fs/promises";
+import { access, cp, mkdir, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 
 const app = fileURLToPath(new URL("../", import.meta.url));
 const root = join(app, "../..");
 const out = join(app, "src-tauri/resources");
+
+for (const entry of ["packages/core/dist/index.js", "packages/mcp-server/dist/index.js"]) {
+  try {
+    await access(join(root, entry));
+  } catch {
+    console.error(`Missing ${entry}. Build the workspace first: pnpm -w exec turbo run build --filter=@poach/mcp-server`);
+    process.exit(1);
+  }
+}
 
 await rm(out, { recursive: true, force: true });
 

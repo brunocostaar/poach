@@ -1,7 +1,7 @@
 {
   "mainBinaryName": "poach",
   "build": {
-    "beforeBuildCommand": "pnpm build && pnpm run stage-resources"
+    "beforeBuildCommand": "pnpm -w exec turbo run build --filter=@poach/linux --filter=@poach/mcp-server && pnpm run stage-resources"
   },
   "bundle": {
     "resources": {
