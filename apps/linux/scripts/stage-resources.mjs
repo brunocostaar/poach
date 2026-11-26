@@ -4,7 +4,7 @@
 // @poach/mcp-server (the app:build hook does both).
 import { build } from "esbuild";
 import { execFileSync } from "node:child_process";
-import { access, cp, mkdir, rm } from "node:fs/promises";
+import { access, cp, mkdir, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 
@@ -28,6 +28,9 @@ await cp(join(root, "packages/core/dist"), join(out, "core"), {
   recursive: true,
   filter: (source) => !/\.(d\.ts|map)$/.test(source),
 });
+// Mark the copy as ESM: Node 22 detects it, but Node 18 (Debian 12) would
+// otherwise load it as CommonJS and find none of its exports.
+await writeFile(join(out, "core/package.json"), `${JSON.stringify({ type: "module" })}\n`);
 
 // Same bundling as scripts/build-connectors.mjs for the macOS connector.
 await build({
