@@ -284,11 +284,22 @@ async function loadVideo(target: HTMLVideoElement, path: string): Promise<void> 
   }
 }
 
-/** Readable label color for a swatch (WCAG relative luminance). */
-function labelColor(hex: string): string {
+/** WCAG relative luminance of a #rrggbb color. */
+function luminance(hex: string): number {
   const channels = [1, 3, 5].map((start) => parseInt(hex.slice(start, start + 2), 16) / 255);
   const [r, g, b] = channels.map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)) as [number, number, number];
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.32 ? "#16173a" : "#ffffff";
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function contrast(first: string, second: string): number {
+  const [light, dark] = [luminance(first), luminance(second)].sort((a, b) => b - a) as [number, number];
+  return (light + 0.05) / (dark + 0.05);
+}
+
+/** Swatch label with the higher contrast, falling back to black when neither reaches 4.5:1. */
+function labelColor(hex: string): string {
+  const best = ["#16173a", "#ffffff"].reduce((a, b) => (contrast(b, hex) > contrast(a, hex) ? b : a));
+  return contrast(best, hex) >= 4.5 ? best : "#000000";
 }
 
 function renderPalette(palette: readonly string[]): void {
