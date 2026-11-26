@@ -19,7 +19,13 @@
         <span class="brand-name">Poach</span>
       </div>
       <button type="button" class="ghost" id="new-capture" hidden>New capture</button>
-      <button type="button" id="connector" class="connector" aria-live="polite">Looking for your assistant…</button>
+      <div class="connector-wrap">
+        <button type="button" id="connector" class="connector" aria-live="polite" aria-haspopup="menu" aria-expanded="false" aria-controls="connector-menu">Looking for your assistant…</button>
+        <div id="connector-menu" class="connector-menu" role="menu" aria-label="Copy the setup command" hidden>
+          <button type="button" role="menuitem" data-setup="claude">Copy Claude Code command</button>
+          <button type="button" role="menuitem" data-setup="codex">Copy Codex command</button>
+        </div>
+      </div>
     </header>
 
     <main>

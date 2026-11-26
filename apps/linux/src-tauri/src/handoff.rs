@@ -100,15 +100,27 @@ pub fn connector_connected() -> bool {
     })
 }
 
-/// Command that registers Poach's MCP connector with Claude Code. Installed
-/// builds ship a bundled connector; development runs use the workspace build.
+#[derive(Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Assistant {
+    Claude,
+    Codex,
+}
+
+/// Command that registers Poach's MCP connector with Claude Code or Codex.
+/// Installed builds ship a bundled connector; development runs use the
+/// workspace build.
 #[tauri::command]
-pub fn connector_command(app: tauri::AppHandle) -> String {
+pub fn connector_command(app: tauri::AppHandle, assistant: Assistant) -> String {
     use tauri::Manager;
     let bundled = app.path().resource_dir().ok().map(|dir| dir.join("mcp/server.mjs")).filter(|path| path.is_file());
     let server = bundled.unwrap_or_else(|| {
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../packages/mcp-server/dist/index.js")
     });
     let server = server.canonicalize().unwrap_or(server);
-    format!("claude mcp add --scope user poach -- node '{}'", server.display())
+    let server = server.display();
+    match assistant {
+        Assistant::Claude => format!("claude mcp add --scope user poach -- node '{server}'"),
+        Assistant::Codex => format!("codex mcp add poach -- node '{server}'"),
+    }
 }

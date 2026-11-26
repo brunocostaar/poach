@@ -49,6 +49,7 @@ function element<T extends Element>(id: string): T {
 
 const ui = {
   connector: element<HTMLButtonElement>("connector"),
+  connectorMenu: element<HTMLDivElement>("connector-menu"),
   newCapture: element<HTMLButtonElement>("new-capture"),
   capture: element<HTMLElement>("capture"),
   captureActions: element<HTMLDivElement>("capture-actions"),
@@ -129,15 +130,40 @@ async function refreshConnector(): Promise<void> {
   connected = await invoke<boolean>("connector_connected").catch(() => false);
   ui.connector.textContent = connected ? "Assistant connected" : "No assistant connected";
   ui.connector.classList.toggle("on", connected);
-  ui.connector.title = connected ? "" : "Copy the command that connects Poach to Claude Code";
+  ui.connector.title = connected ? "" : "Copy the command that connects Poach to Claude Code or Codex";
+  if (connected) closeConnectorMenu(false);
+}
+
+type Assistant = "claude" | "codex";
+const ASSISTANT_NAMES: Record<Assistant, string> = { claude: "Claude Code", codex: "Codex" };
+
+function setupItems(): HTMLButtonElement[] {
+  return [...ui.connectorMenu.querySelectorAll<HTMLButtonElement>("[role=menuitem]")];
+}
+
+function openConnectorMenu(): void {
+  if (connected) return;
+  ui.connectorMenu.hidden = false;
+  ui.connector.setAttribute("aria-expanded", "true");
+  setupItems()[0]?.focus();
+}
+
+function closeConnectorMenu(restoreFocus: boolean): void {
+  if (ui.connectorMenu.hidden) return;
+  ui.connectorMenu.hidden = true;
+  ui.connector.setAttribute("aria-expanded", "false");
+  if (restoreFocus) ui.connector.focus();
 }
 
 /** Copy the setup command; the user runs it once, then opens a new session. */
-async function copyConnectorSetup(): Promise<void> {
-  if (connected) return;
-  const command = await invoke<string>("connector_command");
-  await writeText(command);
-  ui.status.textContent = "Setup command copied. Run it in a terminal, then start a new Claude Code session.";
+async function copyConnectorSetup(assistant: Assistant): Promise<void> {
+  closeConnectorMenu(true);
+  try {
+    await writeText(await invoke<string>("connector_command", { assistant }));
+    ui.status.textContent = `Setup command copied. Run it in a terminal, then start a new ${ASSISTANT_NAMES[assistant]} session.`;
+  } catch (error) {
+    ui.status.textContent = `Could not copy the setup command: ${errorText(error)}`;
+  }
   ui.handoffStatus.textContent = ui.status.textContent;
 }
 
@@ -493,7 +519,28 @@ for (const button of document.querySelectorAll<HTMLButtonElement>("[data-assista
 ui.screenshot.addEventListener("click", () => void takeScreenshot());
 ui.import.addEventListener("click", () => void importFile());
 ui.newCapture.addEventListener("click", showCapture);
-ui.connector.addEventListener("click", () => void copyConnectorSetup());
+ui.connector.addEventListener("click", () => {
+  if (ui.connectorMenu.hidden) openConnectorMenu();
+  else closeConnectorMenu(true);
+});
+for (const item of setupItems()) {
+  item.addEventListener("click", () => void copyConnectorSetup(item.dataset.setup === "codex" ? "codex" : "claude"));
+}
+ui.connectorMenu.addEventListener("keydown", (event) => {
+  const items = setupItems();
+  const index = items.indexOf(document.activeElement as HTMLButtonElement);
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeConnectorMenu(true);
+  } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    const step = event.key === "ArrowDown" ? 1 : -1;
+    items[(index + step + items.length) % items.length]?.focus();
+  }
+});
+document.addEventListener("click", (event) => {
+  if (!(event.target instanceof Node) || !ui.connector.parentElement?.contains(event.target)) closeConnectorMenu(false);
+});
 
 // Actions from the top bar menu and the global shortcut (via the GNOME extension).
 void listen<string>("menu-action", (event) => {
