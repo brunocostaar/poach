@@ -20,7 +20,7 @@ so analysis, briefs and `poach_read_moment` behave the same on both platforms.
 | Top bar menu (Open, New Screenshot, New Recording, Quit) | ✅ with the GNOME extension |
 | Global shortcut to start and stop a screen recording | ✅ Super+Shift+P, with the GNOME extension |
 | Keeps running when its window closes; one instance at a time | ✅ closing hides it when the top bar item exists, otherwise quits |
-| Installable package with an app menu entry | ✅ `.rpm` (and `.deb`) |
+| Installable package with an app menu entry | ✅ `.rpm` and `.deb` release downloads |
 | Font matching, favorites, Chrome companion, palette overrides | ⏳ |
 | Excluding Poach's own window from recordings | ✅ Poach hides while capturing |
 
@@ -35,7 +35,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
 Debian/Ubuntu: `libwebkit2gtk-4.1-dev build-essential libssl-dev librsvg2-dev
-gstreamer1.0-pipewire gstreamer1.0-plugins-bad ffmpeg nodejs`.
+gstreamer1.0-tools gstreamer1.0-pipewire gstreamer1.0-plugins-bad ffmpeg nodejs`.
 
 ## GNOME extension
 
@@ -55,7 +55,10 @@ controls may appear in the video. Window recordings never include them.
 
 ## Install
 
-Build the package from the repository root, then install it:
+Download the [`.rpm`](https://github.com/guilopeszw/poach/releases/latest/download/Poach-x86_64.rpm)
+or [`.deb`](https://github.com/guilopeszw/poach/releases/latest/download/Poach-amd64.deb)
+from the latest release, or build the package from the repository root, then
+install it:
 
 ```sh
 pnpm install
@@ -90,13 +93,17 @@ pnpm --filter @poach/linux app:dev
 
 ## Connect your assistant
 
-Click **No assistant connected** in Poach to copy the setup command for your
-installation, run it once, then open a new session:
+Click **No assistant connected** in Poach and choose **Copy Claude Code
+command** or **Copy Codex command**. Run the copied command once, then open a
+new session. For an installed package the commands are:
 
 ```sh
 claude mcp add --scope user poach -- node /usr/lib/Poach/mcp/server.mjs
-# from a checkout: node "$PWD/packages/mcp-server/dist/index.js"; Codex: codex mcp add …
+codex mcp add poach -- node /usr/lib/Poach/mcp/server.mjs
 ```
+
+From a checkout, replace the path with
+`"$PWD/packages/mcp-server/dist/index.js"` after `pnpm build`.
 
 Poach shows **Assistant connected** once a session has the connector running.
 
@@ -105,3 +112,7 @@ Poach shows **Assistant connected** once a session has the connector running.
 Everything stays in `$XDG_CACHE_HOME/poach` (default `~/.cache/poach`, mode 700):
 recordings and screenshots in `captures/`, keyframes in `frames/`, briefs in
 `active-brief.json` and `briefs/`. Briefs expire after 24 hours, as on macOS.
+At launch and after each share, Poach removes expired brief archives and
+deletes its own recordings, screenshots and keyframes older than 24 hours
+unless an unexpired brief still references them. Files you open from elsewhere
+are never touched.
