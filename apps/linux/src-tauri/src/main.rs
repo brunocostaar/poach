@@ -4,6 +4,7 @@ mod capture;
 mod handoff;
 mod mutter;
 mod paths;
+mod storage;
 mod window_shape;
 
 use tauri::Manager;
@@ -22,6 +23,7 @@ fn main() {
         .manage(bus)
         .setup(|app| {
             window_shape::track(app.handle());
+            std::thread::spawn(storage::prune_cache);
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move { app_service::serve(&handle).await });
             Ok(())

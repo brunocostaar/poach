@@ -5,15 +5,17 @@ use std::{
     fs,
     os::unix::fs::PermissionsExt,
     path::Path,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::Duration,
 };
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use crate::paths;
+use crate::{
+    paths,
+    storage::{self, now_seconds, BRIEF_LIFETIME_SECONDS},
+};
 
-const BRIEF_LIFETIME_SECONDS: f64 = 86_400.0;
 const CONNECTION_LEASE: Duration = Duration::from_secs(15);
 
 #[derive(Serialize, Deserialize)]
@@ -21,10 +23,6 @@ const CONNECTION_LEASE: Duration = Duration::from_secs(15);
 pub struct Annotation {
     time_ms: u64,
     text: String,
-}
-
-fn now_seconds() -> f64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|time| time.as_secs_f64()).unwrap_or_default()
 }
 
 fn write_private(path: &Path, data: &[u8]) -> Result<(), String> {
@@ -80,6 +78,7 @@ pub fn share_handoff(inspection: Value, context: String, annotations: Vec<Annota
     archive_active(&active, &archive)?;
     write_private(&archive.join(format!("{id}.json")), &data)?;
     write_private(&active, &data)?;
+    std::thread::spawn(storage::prune_cache);
     Ok(id)
 }
 
