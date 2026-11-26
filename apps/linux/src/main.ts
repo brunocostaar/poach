@@ -198,11 +198,17 @@ async function takeScreenshot(): Promise<void> {
 }
 
 async function importFile(): Promise<void> {
-  const path = await open({
-    multiple: false,
-    directory: false,
-    filters: [{ name: "Images and videos", extensions: ["png", "jpg", "jpeg", "webp", "tif", "tiff", "bmp", "mp4", "mov"] }],
-  });
+  let path: string | string[] | null;
+  try {
+    path = await open({
+      multiple: false,
+      directory: false,
+      filters: [{ name: "Images and videos", extensions: ["png", "jpg", "jpeg", "webp", "tif", "tiff", "bmp", "mp4", "mov"] }],
+    });
+  } catch (error) {
+    ui.status.textContent = `Could not open the file picker: ${errorText(error)}`;
+    return;
+  }
   if (typeof path !== "string") return;
   setBusy(true);
   try {
